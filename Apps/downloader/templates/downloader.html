@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block content %}
+	<div id = "downloader_app" class='max-w-4xl mx-auto flex flex-col items-center justify-between p-2'>
+		<form @submit.prevent='send_url' class="mx-auto mt-28 mb-10">
+			{% csrf_token %}
+			<input type="text" name="url" class="h-full border border-slate-400 w-80 py-2 px-4 outline-none" v-model="url">
+			<button type="submit" class="h-full bg-green-400 active:bg-green-500 py-2 px-4 border border-green-400" :disabled="download_button_disabled" :class="download_button_disabled ? 'bg-green-300 border-green-300 text-slate-500':''">Download</button>
+		</form>
+
+
+		<div class="w-4/5 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+		  <div class="bg-green-600 h-2.5 rounded-full" :style="{ width: downloaded_percentage + '%'}"></div>
+		</div>
+	</div>
+{% endblock content %}
+
+
+{% block script %}
+	<script>
+		const app = Vue.createApp({
+			delimiters: ['[[', ']]'],
+			data() {
+				return {
+					url: "",
+					downloaded_percentage: 0,
+					file_path: "",
+					download_button_disabled: false,
+					query_token: "{{ query_token}} ",
+					polling: null,
+				};
+			},
+			mounted() {
+				console.log("SALOM");
+			},
+			methods: {
+				send_url(){
+					var data = {"url": this.url};
+
+					fetch('/', {
+						method: "POST",
+						headers: {
+							"Content-type": "application/json",
+							"X-CSRFToken": "{{ csrf_token }}"
+						},
+						credentials: "same-origin",
+						body: JSON.stringify(data),
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						this.query_token = data['query_token'];
+						console.log(this.query_token);
+						this.download_button_disabled = true;
+						this.polling = setInterval(this.get_downloading_progress, 1000);
+					})
+					.catch((error) => {
+						console.log(error);
+					})
+					},
+				get_downloading_progress(){
+					var data = {"query_token": this.query_token}
+
+					fetch('/api_get_downloading_progress', {
+						method: "POST",
+						headers: {
+							"Content-type": "application/json",
+							"X-CSRFToken": "{{ csrf_token }}"
+						},
+						credentials: "same-origin",
+						body: JSON.stringify(data),
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						this.downloaded_percentage = data["downloaded_percentage"];
+						this.file_path = data["file_path"];
+						
+						console.log(this.downloaded_percentage);
+						console.log(data["file_path"]);
+
+						if(this.downloaded_percentage == 100){
+							clearInterval(this.polling);
+							this.download_button_disabled = false;
+							window.location.href = this.file_path;
+						}
+					})
+					.catch((error) => {
+						console.log(error);
+					})
+				}
+			}
+		});
+
+		app.mount("#downloader_app");
+	</script>
+{% endblock script %}
